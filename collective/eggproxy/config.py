@@ -18,6 +18,7 @@ import os
 import sys
 from ConfigParser import ConfigParser
 from ConfigParser import NoSectionError
+import socket
 
 
 # First try: User-specific config file
@@ -34,7 +35,12 @@ if not os.path.exists(CONFIG_FILE):
 config = ConfigParser()
 config.add_section("eggproxy")
 config.set("eggproxy", "eggs_directory", "/var/www")
-config.set("eggproxy", "index", 'http://pypi.python.org/simple')
+# http://www.python.org/dev/peps/pep-0381/
+# Clients that are browsing PyPI should be able to use alternative mirrors, 
+# by getting the list of the mirrors using last.pypi.python.org.
+config.set("eggproxy", "index", 
+    'http://%s/simple' % socket.gethostbyname_ex('last.pypi.python.org')[0])
+sys.stderr.write('Using index %s\n' % config.get("eggproxy", "index"))
 config.set("eggproxy", "update_interval", '24')
 config.set("eggproxy", "port", '8888')
 config.set("eggproxy", "always_refresh", '0')
