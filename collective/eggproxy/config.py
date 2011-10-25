@@ -40,7 +40,6 @@ config.set("eggproxy", "eggs_directory", "/var/www")
 # by getting the list of the mirrors using last.pypi.python.org.
 config.set("eggproxy", "index", 
     'http://%s/simple' % socket.gethostbyname_ex('last.pypi.python.org')[0])
-sys.stderr.write('Using index %s\n' % config.get("eggproxy", "index"))
 config.set("eggproxy", "update_interval", '24')
 config.set("eggproxy", "port", '8888')
 config.set("eggproxy", "always_refresh", '0')

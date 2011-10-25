@@ -19,14 +19,18 @@
 import os
 import socket
 import sys
+from time import time
+
 from paste import httpserver
 from paste.script.appinstall import Installer as BaseInstaller
 from paste.fileapp import FileApp
 from paste.httpexceptions import HTTPNotFound
+
 from collective.eggproxy.utils import PackageIndex
 from collective.eggproxy import IndexProxy
 from collective.eggproxy import PackageNotFound
 from collective.eggproxy.config import config
+from collective.eggproxy.update_script import UPDATE_INTERVAL
 
 ALWAYS_REFRESH = config.getboolean('eggproxy', 'always_refresh')
 if ALWAYS_REFRESH:
@@ -43,17 +47,22 @@ class EggProxyApp(object):
     def __init__(self, index_url=None, eggs_dir=None):
         if not index_url:
             index_url = config.get('eggproxy', 'index')
+            index_url = index_url.strip().split('\n')
         if not eggs_dir:
             eggs_dir = config.get('eggproxy', 'eggs_directory')
         if not os.path.isdir(eggs_dir):
             print 'You must create the %r directory' % eggs_dir
             sys.exit()
-        self.eggs_index_proxy = IndexProxy(PackageIndex(index_url=index_url))
+        self.eggs_index_proxy = IndexProxy([PackageIndex(index_url=i) for i in index_url])
         self.eggs_dir = eggs_dir
 
     def __call__(self, environ, start_response):
         path = [part for part in environ.get('PATH_INFO', '').split('/')
                 if part]
+        
+        if path and path[0] == 'simple':
+            path.pop(0)
+        
         if len(path) > 2:
             raise ValueError, "too many components in url"
 
@@ -78,13 +87,13 @@ class EggProxyApp(object):
 
     def checkBaseIndex(self):
         filename = os.path.join(self.eggs_dir, 'index.html')
-        if not os.path.exists(filename) or ALWAYS_REFRESH:
+        if self.isOutDated(filename) or ALWAYS_REFRESH:
             self.eggs_index_proxy.updateBaseIndex(self.eggs_dir)
         return filename
 
     def checkPackageIndex(self, package_name):
         filename = os.path.join(self.eggs_dir, package_name, 'index.html')
-        if not os.path.exists(filename):
+        if self.isOutDated(filename):
             try:
                 self.eggs_index_proxy.updatePackageIndex(
                     package_name,
@@ -113,6 +122,16 @@ class EggProxyApp(object):
             except ValueError:
                 return None
         return filename
+        
+    def isOutDated(self, file_path):
+        """ A file is outdated if it does not exists or if its modification date is
+            older than now - update_interval. Copied from update_script, but with
+            time calc inline.
+        """
+        if os.path.exists(file_path):
+            mtime = os.path.getmtime(file_path)
+            return mtime < int(time()) - UPDATE_INTERVAL
+        return True
 
 
 def app_factory(global_config, **local_conf):
@@ -120,6 +139,8 @@ def app_factory(global_config, **local_conf):
     # take over.
     eggs_dir = local_conf.get('eggs_directory', None)
     index_url = local_conf.get('index', None)
+    if index_url:
+        index_url = index_url.strip().split('\n')
     return EggProxyApp(index_url, eggs_dir)
 
 

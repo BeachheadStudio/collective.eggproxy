@@ -37,8 +37,8 @@ from collective.eggproxy.config import config
 
 ALWAYS_REFRESH = config.getboolean('eggproxy', 'always_refresh')
 EGGS_DIR = config.get("eggproxy", "eggs_directory")
-INDEX_URL = config.get("eggproxy", "index")
-#INDEX is defined *after* the PackageIndex class.
+INDEX_URLS = config.get("eggproxy", "index").strip().split('\n')
+#INDEXES is defined *after* the PackageIndex class.
 
 
 class PackageIndex(BasePackageIndex):
@@ -131,7 +131,7 @@ class PackageIndex(BasePackageIndex):
             return ""   # no sense double-scanning non-package pages
 
 
-INDEX = PackageIndex(index_url=INDEX_URL)
+INDEXES = [PackageIndex(index_url=i) for i in INDEX_URLS]
 
 
 class PackageNotFound(Exception):
@@ -141,8 +141,23 @@ class PackageNotFound(Exception):
 
 class IndexProxy(object):
 
-    def __init__(self, index=None):
-        self.index = index or INDEX
+    def __init__(self, indexes=None):
+        self.indexes = indexes or INDEXES
+        self.packages = {}
+        
+    def package_names(self):
+        result = list(set(sum([i.package_pages.keys() for i in self.indexes],[])))
+        return result
+    
+    def package_by_name(self, package_name):
+        """ The union of all distributions available from all indexes
+            from this 
+        """
+        result = []
+        for i in self.indexes:
+            if i.package_pages.get(package_name, None):
+                result.extend(i[package_name])
+        return result
 
     def updateBaseIndex(self, eggs_dir=EGGS_DIR):
         """Update base index.html
@@ -154,9 +169,8 @@ class IndexProxy(object):
         # union these packages with the remote packages
         local_package_names = [item for item in os.listdir(eggs_dir)
                 if os.path.isdir(os.path.join(eggs_dir,item))]
-        self.index.scan_all()
-        package_names = list(set(self.index.package_pages.keys()).union(
-            set(local_package_names)))
+        [i.scan_all() for i in self.indexes]
+        package_names = list(set(self.package_names()).union(set(local_package_names)))
         package_names.sort()
 
         print >> html, "<html><head><title>Simple Index</title></head><body>"
@@ -169,7 +183,7 @@ class IndexProxy(object):
 
     def _lookupPackage(self, package_name):
         requirement = Requirement.parse(package_name)
-        self.index.find_packages(requirement)
+        [i.find_packages(requirement) for i in self.indexes]
 
     def updatePackageIndex(self, package_name, eggs_dir=EGGS_DIR):
         """Update info for a specific package
@@ -183,14 +197,15 @@ class IndexProxy(object):
                     local_eggs[pkg] = True
 
         self._lookupPackage(package_name)
-        if not self.index[package_name] and len(local_eggs) == 0:
+        
+        if not self.package_by_name(package_name) and len(local_eggs) == 0:
             raise PackageNotFound, "Package '%s' does not exists or has no " \
                     "eggs" % package_name
 
         if not os.path.exists(package_path):
             os.mkdir(package_path)
         html_path = os.path.join(package_path, 'index.html')
-        dists = self.index[package_name]
+        dists = self.package_by_name(package_name)
         if not dists and os.path.exists(html_path):
             # We already have a cached index page and there are no dists.
             # Pypi is probably down, so we keep our existing one.
@@ -226,7 +241,7 @@ class IndexProxy(object):
         """
         self._lookupPackage(package_name)
         file_path = os.path.join(eggs_dir, package_name, eggname)
-        for dist in self.index[package_name]:
+        for dist in self.package_by_name(package_name):
             if getattr(dist, "module_path", None) is not None:
                 # this is a module installed in system (directory), we want
                 # to download a fresh package
@@ -238,11 +253,13 @@ class IndexProxy(object):
             if filename == eggname:
                 tmp = tempfile.gettempdir()
                 try:
-                    tmp_location = self.index.download(dist.location, tmp)
+                    # multinidex: is this assumption valid? can any old index A
+                    # download a dist from index B?
+                    tmp_location = self.indexes[0].download(dist.location, tmp)
                     sys.stderr.write('Downloaded %s\n' % dist.location)
                     shutil.move(tmp_location, file_path)
                     return
                 except Exception, err:
-                    sys.stderr.write('Error downloading %s: \n\t%s\n' % (dist.location, err))
+                    sys.stderr.write('Error downloading %s: \n    %s\n' % (dist.location, err))
 
         raise ValueError, "Egg '%s' not found in index" % eggname
