@@ -173,10 +173,10 @@ class IndexProxy(object):
         package_names = list(set(self.package_names()).union(set(local_package_names)))
         package_names.sort()
 
-        print >> html, "<html><head><title>Simple Index</title></head><body>"
+        html.write("<html><head><title>Simple Index</title></head><body>")
         for pack_name in package_names:
-            print >> html, '<a href="%s/">%s</a><br/>' % (pack_name, pack_name)
-        print >> html, '</body></html>'
+            html.write('<a href="%s/">%s</a><br/>\n' % (pack_name, pack_name))
+        html.write('</body></html>')
 
         html.close()
         del html
@@ -212,27 +212,25 @@ class IndexProxy(object):
             return
         html = open(html_path, 'w')
         title = "Links for %s" % package_name
-        print >> html, "<html><head><title>%s</title></head>" % package_name
-        print >> html, "<body><h1>%s</h1>" % package_name
+        html.write("""<html><head><title>%s</title></head><body><h1>%s</h1>""" % (title,title))
         for dist in dists:
             if getattr(dist, "module_path", None) is not None:
                 # this is a module installed in system
                 continue
 
             filename, md5 = egg_info_for_url(dist.location)
-            print >> html, (
-                '<a href="%s#%s" rel="download">%s</a><br />'
+            html.write('<a href="%s#%s">%s</a><br/>\n'
                 % (filename, md5, filename)
                 )
             if filename in local_eggs:
                 del local_eggs[filename]
         for egg in local_eggs:
-            print >> html, (
-                '<a href="%s" rel="download">%s</a><br />'
+            html.write(
+                '<a href="%s">%s</a><br/>\n'
                 % (egg, egg)
                 )
 
-        print >> html, "</body></html>"
+        html.write("</body></html>")
         html.close()
         del html
 

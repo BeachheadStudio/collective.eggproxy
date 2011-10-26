@@ -33,8 +33,10 @@ from collective.eggproxy.config import config
 from collective.eggproxy.update_script import UPDATE_INTERVAL
 
 ALWAYS_REFRESH = config.getboolean('eggproxy', 'always_refresh')
+# TODO: Really need this?
+socket.setdefaulttimeout(3)
 if ALWAYS_REFRESH:
-    print "Always-refresh mode switched on"
+    sys.stderr.write("Always-refresh mode switched on\n")
     # Apply timeout setting right here. Might not be the best spot. Timeout is
     # needed for the always_refresh option to keep a down pypi from blocking
     # the proxy.
@@ -51,18 +53,20 @@ class EggProxyApp(object):
         if not eggs_dir:
             eggs_dir = config.get('eggproxy', 'eggs_directory')
         if not os.path.isdir(eggs_dir):
-            print 'You must create the %r directory' % eggs_dir
+            sys.stderr.write('You must create the %r directory\n' % eggs_dir)
             sys.exit()
         self.eggs_index_proxy = IndexProxy([PackageIndex(index_url=i) for i in index_url])
         self.eggs_dir = eggs_dir
 
     def __call__(self, environ, start_response):
+        
         path = [part for part in environ.get('PATH_INFO', '').split('/')
                 if part]
         
+        
         if path and path[0] == 'simple':
             path.pop(0)
-        
+            
         if len(path) > 2:
             raise ValueError, "too many components in url"
 
@@ -76,14 +80,27 @@ class EggProxyApp(object):
         elif path_len == 1:
             if path[0] == "favicon.ico":
                 return HTTPNotFound()(environ, start_response)
+                
+            if not environ.get('PATH_INFO', '').endswith('/'):
+                start_response('301 Moved Permanently', 
+                    [('Location', '%s://%s/simple%s/' % (
+                        environ.get('wsgi.url_scheme', 'http'), 
+                        environ['HTTP_HOST'], 
+                        environ.get('PATH_INFO', '')))
+                    ])
+
+                return []
             filename = self.checkPackageIndex(path[0])
         else:
             filename = self.checkEggFor(path[0], path[1])
 
         if filename is None:
             return HTTPNotFound()(environ, start_response)
-
-        return FileApp(filename)(environ, start_response)
+        
+        
+        result = FileApp(filename)(environ, start_response)
+        
+        return result
 
     def checkBaseIndex(self):
         filename = os.path.join(self.eggs_dir, 'index.html')
@@ -119,7 +136,8 @@ class EggProxyApp(object):
             try:
                 self.eggs_index_proxy.updateEggFor(package_name, eggname,
                                                    eggs_dir=self.eggs_dir)
-            except ValueError:
+            except Exception, e:
+                sys.stderr.write('Error getting %s:\n    %s\n' % (filename, e))
                 return None
         return filename
         
