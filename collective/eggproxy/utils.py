@@ -206,15 +206,15 @@ class IndexProxy(object):
 
             filename, md5 = egg_info_for_url(dist.location)
             print >> html, (
-                '<a href="%s#%s" rel="download">%s</a><br />'
-                % (filename, md5, filename)
+                '<a href="%s/%s#%s" rel="download">%s</a><br />'
+                % (package_name, filename, md5, filename)
                 )
             if filename in local_eggs:
                 del local_eggs[filename]
         for egg in local_eggs:
             print >> html, (
-                '<a href="%s" rel="download">%s</a><br />'
-                % (egg, egg)
+                '<a href="%s/%s" rel="download">%s</a><br />'
+                % (package_name, egg, egg)
                 )
 
         print >> html, "</body></html>"
@@ -224,7 +224,6 @@ class IndexProxy(object):
     def updateEggFor(self, package_name, eggname, eggs_dir=EGGS_DIR):
         """Download an egg for package_name
         """
-        print "updating egg for %s" % eggname
         self._lookupPackage(package_name)
         file_path = os.path.join(eggs_dir, package_name, eggname)
         for dist in self.index[package_name]:
