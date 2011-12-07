@@ -224,6 +224,7 @@ class IndexProxy(object):
     def updateEggFor(self, package_name, eggname, eggs_dir=EGGS_DIR):
         """Download an egg for package_name
         """
+        print "updating egg for %s" % eggname
         self._lookupPackage(package_name)
         file_path = os.path.join(eggs_dir, package_name, eggname)
         for dist in self.index[package_name]:
