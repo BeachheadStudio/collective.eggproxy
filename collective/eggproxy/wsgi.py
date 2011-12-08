@@ -55,7 +55,10 @@ class EggProxyApp(object):
         path = [part for part in environ.get('PATH_INFO', '').split('/')
                 if part]
         if len(path) > 2:
-            raise ValueError, "too many components in url"
+            if path[0] == path[1] and len(path) == 3:
+                path = path[1:]
+            else:
+                raise ValueError, "too many components in url"
 
         if len(path) > 0 and path[-1] == 'index.html':
             path.pop()
